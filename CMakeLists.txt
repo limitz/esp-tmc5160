@@ -1,3 +1,3 @@
-idf_component_register(SRCS "apa102.c"
+idf_component_register(SRCS "tmc5160.c"
 			INCLUDE_DIRS .)
 

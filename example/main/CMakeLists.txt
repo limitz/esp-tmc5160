@@ -1,4 +1,4 @@
 idf_component_register(SRCS
-		"apa102_example.c"
+		"tmc5160_example.c"
 		INCLUDE_DIRS ".")
 

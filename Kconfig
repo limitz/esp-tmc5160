@@ -1,40 +1,64 @@
-menu "LIMITZ led strip APA102"
+menu "LIMITZ TMC-5160 motor controller"
 
-	config LMTZ_APA102_NUM_LEDS
+	config LMTZ_TMC5160_NUM_CHAIN
 		int
-		prompt "Number of leds"
+		prompt "Number of daisychained controllers"
 		default 1
 	
-	choice LMTZ_APA102_SPI
+	choice LMTZ_TMC5160_SPI
 		prompt "SPI host"
-		default LMTZ_APA102_SPI_HSPI
+		default LMTZ_TMC5160_SPI_HSPI
 
-		config LMTZ_APA102_SPI_HSPI
-			bool "HSPI"
+		config LMTZ_TMC5160_SPI_HSPI
+			bool "HSPI / SPI2)"
 		
-		config LMTZ_APA102_SPI_VSPI
-			bool "VSPI"
+		config LMTZ_TMC5160_SPI_VSPI
+			bool "VSPI / SPI3"
 	endchoice
 
-		
-	config LMTZ_APA102_DMA_CHANNEL
+	config LMTZ_TMC5160_CLOCK_SPEED
 		int
-		prompt "DMA channel" 
-		default 2
-
-	config LMTZ_APA102_PIN_MOSI
-		int
-		prompt "SPI: MOSI pin"
-		default 13
-
-	config LMTZ_APA102_PIN_SCLK
-		int
-		prompt "SPI: SCLK pin"
-		default 14
-
-	config LMTZ_APA102_CLOCK_SPEED
-		int
-		prompt "SPI: Clock speed"
+		prompt "SPI Clock speed"
 		default 1000000
+	
+	config LMTZ_TMC5160_SPI_USE_GPIO
+		bool  "SPI uses GPIO matrix pins"
+		default y
+
+	config LMTZ_TMC5160_SPI_USE_DMA
+		bool "SPI uses DMA"
+		default y
+
+	config LMTZ_TMC5160_SPI_DMA_CHANNEL
+		depends on LMTZ_TMC5160_SPI_USE_DMA
+		int "DMA channel" 
+		default 1
+
+	config LMTZ_TMC5160_PIN_MOSI
+		depends on LMTZ_TMC5160_SPI_USE_GPIO
+		int "SPI: MOSI pin"
+		default 23
+
+	config LMTZ_TMC5160_PIN_MISO
+		depends on LMTZ_TMC5160_SPI_USE_GPIO
+		int "SPI: MISO pin"
+		default 19
+
+	config LMTZ_TMC5160_PIN_SCK
+		depends on LMTZ_TMC5160_SPI_USE_GPIO
+		int "SPI: SCK pin"
+		default 18
+
+	config LMTZ_TMC5160_PIN_CS
+		depends on LMTZ_TMC5160_SPI_USE_GPIO
+		int "SPI: CS pin"
+		default 5
+
+	config LMTZ_TMC5160_PIN_EN
+		int "TMC: EN pin"
+		default 27
+
+
+	
 
 endmenu
