@@ -94,16 +94,18 @@ typedef struct
 
 typedef struct
 {
-
+	uint32_t current_position;
+	uint32_t target_position;
 } tmc5160_t;
 
 typedef struct
 {
 	int (*init)();
 	int (*deinit)();
+	int (*reset)(uint32_t initial_position);
 	int (*update)();
 	int (*enable)(bool en);
-
+	
 	int spi_host;
 	int dma_channel;
 	int count;
@@ -117,6 +119,7 @@ typedef struct
 	} pins;
 
 	tmc5160_transaction_t* tbuffer;
+	tmc5160_t motors[TMC5160_NUM_CHAIN];
 
 	spi_bus_config_t bus_config;
 	spi_device_interface_config_t dev_config;

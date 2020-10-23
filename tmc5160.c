@@ -77,87 +77,95 @@ static int tmc5160_sync()
 	return ESP_OK;
 }
 
-static int tmc5160_update() 
+inline uint32_t msb32(uint32_t x) {
+	return		  (0x000000FF & (x >> 030))
+			| (0x0000FF00 & (x >> 010))
+			| (0x00FF0000 & (x << 010))
+			| (0xFF000000 & (x << 030));
+}
+
+static int tmc5160_push(tmc5160_transaction_t* t)
+{
+	int error = spi_device_queue_trans(TMC5160.device, &t->ref, 100);
+	if (ESP_OK != error) {
+		ESP_LOGW(TAG, "Unable to queue datagram: error %01x", error);
+		return error;
+	}
+
+	TMC5160._queued_transaction_count += 1;
+	return ESP_OK;
+}
+
+static int tmc5160_reset(uint32_t pos) 
 {
 	int error;
-	static int i = 0;
-	static uint8_t req[] = {
-		 0x00 ,  0x01 ,  0x04 , 0x12, 
-		 0x20 ,  0x21 ,  0x22 , 0x2D, 
-		 0x34 ,  0x35 ,  0x36 ,
-		 0x6C ,  0x6F ,
-		 0x71 ,  0x72 ,  0x00,
-	};
-
-	static tmc5160_datagram_t g[] = {
+	uint32_t  mpos = msb32(pos);
+	tmc5160_datagram_t g[] = {
 		{ .address = 0x01, .data = 0x00000000 },
-		{ .address = 0x8b, .data = 0x000001DD },
-		{ .address = 0x90, .data = 0x00000600 },
-		{ .address = 0x93, .data = 0x00000FFF },
-		{ .address = 0x94, .data = 0x00000FFF },
+		{ .address = 0x8b, .data = 0x000001EE },
+		{ .address = 0x90, .data = 0x000002E1 },
+		{ .address = 0x93, .data = 0x00014000 },
+		{ .address = 0x94, .data = 0x00018000 },
 		{ .address = 0x95, .data = 0x0000002F },
 		{ .address = 0xA0, .data = 0x00000000 },
-		{ .address = 0xA1, .data = 0x00000000 },
 		{ .address = 0xA3, .data = 0x00000500 },
 		{ .address = 0xA4, .data = 0x00000600 },
-		{ .address = 0xA5, .data = 0x00018000 },
+		{ .address = 0xA5, .data = 0x00010000 },
 		{ .address = 0xA6, .data = 0x00000300 },
-		{ .address = 0xA7, .data = 0x00030000 },
+		{ .address = 0xA7, .data = 0x000C0000 },
 		{ .address = 0xA8, .data = 0x00000F00 },
 		{ .address = 0xAA, .data = 0x00000D00 },
 		{ .address = 0xAB, .data = 0x00000600 },
 		{ .address = 0xAC, .data = 0x00000800 },
-		{ .address = 0xAD, .data = 0x00000000 },
 		{ .address = 0xB3, .data = 0x00000000 },
 		{ .address = 0xB4, .data = 0x00000000 },
 		{ .address = 0xEE, .data = 0x0000001C },
 		{ .address = 0xEC, .data = 0x10410155 },
-		{ .address = 0xA1, .data = 0x00100000 },
+		{ .address = 0xA1, .data = mpos },
+		{ .address = 0xAD, .data = mpos },
 		{ .address = 0x00, .data = 0x00000000 },
 	};
 
-	if (!i)
+	for (int i=0; i<23; i++)
 	{
-		for (i=0; i<24; i++)
+		tmc5160_transaction_t *t = TMC5160.tbuffer + i;
+		t->ref.tx_buffer = t->tx;
+		t->ref.rx_buffer = t->rx;
+		//t->ref.user = i;
+		t->ref.length = dgbit_size();	
+		for (int c=0; c<TMC5160_NUM_CHAIN; c++) 
 		{
-			tmc5160_transaction_t *t = TMC5160.tbuffer + i;
-			t->ref.tx_buffer = t->tx;
-			t->ref.rx_buffer = t->rx;
-			//t->ref.user = i;
-			t->ref.length = dgbit_size();	
-			for (int c=0; c<TMC5160_NUM_CHAIN; c++) 
-			{
-				t->tx[c].address = g[i].address;
-				t->tx[c].data = (0x000000FF & (g[i].data >> 030))
-					      | (0x0000FF00 & (g[i].data >> 010))
-					      | (0x00FF0000 & (g[i].data << 010))
-					      | (0xFF000000 & (g[i].data << 030))
-					      ;
-	
-				memset(t->rx, 0xEE, 5);
-			}
-			error = spi_device_queue_trans(TMC5160.device, &t->ref, 100);
-			if (ESP_OK != error) {
-				ESP_LOGW(TAG, "Unable to queue datagram: error %01x", error);
-				return error;
-			}
-	
-			TMC5160._queued_transaction_count += 1;
+			t->tx[c].address = g[i].address;
+			t->tx[c].data = msb32(g[i].data);
+			memset(t->rx, 0xEE, 5);
 		}
-		ESP_ERROR_CHECK( error = tmc5160_sync() );
-		if (ESP_OK != error) return error;
-
-		ESP_LOGW(TAG, "[REGS]");
-		for (int j=1; j<24; j++)
-		{
-			ESP_LOGI(TAG, "%02X: %08X %02X ", 
-			TMC5160.tbuffer[j-1].tx[0].address, 
-			TMC5160.tbuffer[j].rx[0].data, 
-			TMC5160.tbuffer[j].rx[0].address);
-		}
-		ESP_LOGW(TAG, "-----");
+		tmc5160_push(t);
 	}
-//	ESP_LOG_BUFFER_HEX(TAG, TMC5160.tbuffer, alloc_size());
+	ESP_ERROR_CHECK( error = tmc5160_sync() );
+	if (ESP_OK != error) return error;
+
+	ESP_LOGW(TAG, "[REGS]");
+	for (int j=1; j<24; j++)
+	{
+		ESP_LOGI(TAG, "%02X: %08X %02X ", 
+		TMC5160.tbuffer[j-1].tx[0].address, 
+		TMC5160.tbuffer[j].rx[0].data, 
+		TMC5160.tbuffer[j].rx[0].address);
+	}
+	ESP_LOGW(TAG, "-----");
+	return ESP_OK;
+}
+
+static int tmc5160_update()
+{
+	tmc5160_transaction_t* t = TMC5160.tbuffer;
+	for (int c=0; c<TMC5160.count; c++) 
+	{
+		 t->tx[c].address = 0xAD;
+		 t->tx[c].data = msb32(TMC5160.motors[c].target_position);
+	}
+	tmc5160_push(t);
+	tmc5160_sync();
 
 	return ESP_OK;
 }
@@ -214,6 +222,7 @@ tmc5160_driver_t TMC5160 = {
 
 	.init = tmc5160_init,
 	.enable = tmc5160_enable,
+	.reset = tmc5160_reset,
 	.update = tmc5160_update,
 	.deinit = tmc5160_deinit,
 };
